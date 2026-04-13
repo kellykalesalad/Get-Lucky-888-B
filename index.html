@@ -2615,7 +2615,6 @@ function render(){
 
   if(S.view==='lobby'){
     if(hb) hb.style.display='none';
-    if(!R.code) try{localStorage.removeItem('mj_room');}catch(e){} // clear if not in room
     renderLobby();
     return;
   }
