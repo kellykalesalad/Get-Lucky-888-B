@@ -1739,6 +1739,7 @@ async function joinRoom(code){
 
 async function pushRoomState(){
   if(!R.code) return;
+  R._writing = true; // lock poll from overwriting during save
   const gs={
     players:G.players, eastIdx:G.eastIdx, startEastIdx:G.startEastIdx||0,
     roundWind:G.roundWind, maxFan:G.maxFan||8, minFan:S.minFan||3, hands:G.hands||[]
@@ -1747,6 +1748,7 @@ async function pushRoomState(){
     const {error} = await sbUpdate('rooms', {game_state:JSON.stringify(gs)}, 'code', R.code);
     if(error) console.warn('pushRoomState error:', fmtSBError(error));
   }catch(e){ console.warn('pushRoomState failed:', e.message); }
+  finally{ R._writing = false; }
 }
 
 function subscribeRoom(code){
@@ -1763,6 +1765,7 @@ function subscribeRoom(code){
       const gs = data.game_state||'';
       if(gs === lastGs) return; // no change
       lastGs = gs;
+      if(R._writing) return; // local write in progress — skip overwrite
       const parsed = JSON.parse(gs);
       if(parsed.players?.length){
         G.players=parsed.players; G.eastIdx=parsed.eastIdx||0;
@@ -1790,6 +1793,7 @@ function subscribeRoom(code){
 
 async function pushRoomState(){
   if(!R.code) return;
+  R._writing = true; // lock poll from overwriting during save
   const gs={
     players:G.players, eastIdx:G.eastIdx, startEastIdx:G.startEastIdx||0,
     roundWind:G.roundWind, maxFan:G.maxFan||8, minFan:S.minFan||3, hands:G.hands||[]
@@ -1798,6 +1802,7 @@ async function pushRoomState(){
     const {error} = await sbUpdate('rooms', {game_state:JSON.stringify(gs)}, 'code', R.code);
     if(error) console.warn('pushRoomState error:', fmtSBError(error));
   }catch(e){ console.warn('pushRoomState failed:', e.message); }
+  finally{ R._writing = false; }
 }
 
 function showRoomError(msg){ R._joinError=msg; renderLobby(); setTimeout(()=>{R._joinError='';renderLobby();},4000); }
@@ -2150,7 +2155,7 @@ function doRecord(){
 }
 
 
-function commitGame(){
+async function commitGame(){
   playClick(0);
   // Commit player names (use MTR placeholders for blanks)
   const mtr = G._mtrPlaceholders || pickMTR();
@@ -2182,7 +2187,8 @@ function commitGame(){
   G.roundWind = S.roundWind;
   G.maxFan = S.maxFan || 8;
   S.view='calc'; render();
-  pushRoomState();
+  await pushRoomState();
+  render(); // re-render after push to show updated names
 }
 
 
@@ -2816,18 +2822,22 @@ async function silentRejoin(savedCode){
 
 // ── On load: check URL param, then localStorage for active room ──
 (async ()=>{
-  S.view='lobby';
-  render();
   const params = new URLSearchParams(window.location.search);
   const roomCode = params.get('room');
-  if(roomCode){
-    await joinRoom(roomCode);
+  let savedRoom = null;
+  try{ savedRoom = localStorage.getItem('mj_room'); }catch(e){}
+
+  if(roomCode || savedRoom){
+    // Show a plain loading screen — no lobby flash
+    const el = document.getElementById('stepContent');
+    const hb = document.getElementById('handBox');
+    if(hb) hb.style.display='none';
+    if(el) el.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--chalk-dim);font-size:14px">Rejoining room...</div>';
+    if(roomCode) await joinRoom(roomCode);
+    else await silentRejoin(savedRoom);
   } else {
-    // Try restoring from localStorage — silently, without showing lobby/sounds
-    try{
-      const saved = localStorage.getItem('mj_room');
-      if(saved) await silentRejoin(saved);
-    }catch(e){}
+    S.view='lobby';
+    render();
   }
 })();
 
