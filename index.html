@@ -1047,7 +1047,7 @@ function step1(){
   }).join('');
 
   const canNext = true; // no required fields now
-  const btnLabel = 'Update';
+  const btnLabel = (typeof G!=='undefined'&&G.players&&G.players.length>0) ? 'Update' : 'Start tracking';
 
   return `<div class="scard setup-card">
     <div class="setup-pill">Game Setup</div>
@@ -1703,6 +1703,7 @@ async function createRoom(){
     if(insertErr){ showRoomError(fmtSBError(insertErr)); return; }
     // Navigate immediately
     R.code = code;
+    try{ localStorage.setItem('mj_room', code); }catch(e){}
     subscribeRoom(code);
     // Only reset if truly starting fresh (no existing players)
     if(G.players.length===0){ G.eastIdx=0; G.startEastIdx=0; G.hands=[]; G._draft=null; G._mtrPlaceholders=null; }
@@ -1728,6 +1729,7 @@ async function joinRoom(code){
     G.roundWind=gs.roundWind||'東'; G.maxFan=gs.maxFan||8; G.hands=gs.hands||[];
     S.minFan=gs.minFan||3; S.roundWind=G.roundWind;
     R.code=code; R._joining=false;
+    try{ localStorage.setItem('mj_room', code); }catch(e){}
     subscribeRoom(code);
     renderRoomBadge();
     if(G.players.length===0){ S.view='setup'; render(); }
